@@ -1,0 +1,2 @@
+"""GaoKao Bench evaluation package."""
+

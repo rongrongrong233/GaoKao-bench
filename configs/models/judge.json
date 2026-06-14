@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "name": "deepseek-v4-pro-judge",
+      "provider": "openai_compatible",
+      "model": "deepseek-v4-pro",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "DS_API_KEY",
+      "temperature": 0,
+      "max_tokens": 4096,
+      "timeout_seconds": 120,
+      "reasoning_effort": null,
+      "extra_body": {}
+    }
+  ]
+}

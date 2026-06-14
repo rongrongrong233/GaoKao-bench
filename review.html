@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GaoKao Bench - 答题审阅</title>
+<!-- KaTeX for LaTeX rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: #f5f5f5; color: #333; }
+.header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.header h1 { font-size: 18px; }
+.file-area { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.file-area label { background: #e94560; color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.file-area label.grades { background: #533483; }
+.file-area label.review { background: #1565c0; }
+.file-area .clear-btn { background: #757575; color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; border: none; }
+.file-area .clear-btn:hover { background: #616161; }
+.file-area input[type=file] { display: none; }
+.file-name { color: #aaa; font-size: 12px; max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-bar { display: flex; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; font-size: 13px; }
+.stat { display: flex; gap: 4px; align-items: baseline; }
+.stat-label { color: #888; }
+.stat-value { font-weight: 600; }
+.stat-value.correct { color: #2e7d32; }
+.stat-value.incorrect { color: #c62828; }
+.stat-value.partial { color: #e65100; }
+.filters { display: flex; gap: 8px; padding: 8px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; align-items: center; }
+.filters select, .filters input { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+.table-wrap { padding: 0 24px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { table-layout: fixed; min-width: 800px; }
+th { background: #fafafa; padding: 8px 26px 8px 10px; text-align: left; border-bottom: 2px solid #e0e0e0; position: sticky; top: 0; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+th:hover { background: #f0f0f0; }
+td { padding: 6px 10px; border-bottom: 1px solid #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-resizer { position: absolute; right: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 1; }
+.col-resizer:hover, .col-resizer.active { background: #999; }
+.col-resizer::after { content: ''; position: absolute; left: -3px; right: -3px; top: 0; bottom: 0; }
+tr { cursor: pointer; }
+tr:hover { background: #f0f4ff; }
+tr.expanded { background: #e8f0fe; }
+.row-detail { background: #fafafa; }
+.row-detail td { white-space: normal; padding: 12px 16px; }
+.detail-section { margin-bottom: 12px; }
+.detail-section h4 { font-size: 12px; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.detail-content { background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px 14px; max-height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+.detail-content.answer { background: #e8f5e9; }
+/* KaTeX styles */
+.detail-content .katex { font-size: 1.1em; }
+.detail-content .katex-display { margin: 0.5em 0; overflow-x: auto; overflow-y: hidden; }
+.detail-content .katex-display > .katex { white-space: normal; }
+.reasoning { color: #555; font-style: italic; }
+.verdict-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.verdict-badge.correct { background: #e8f5e9; color: #2e7d32; }
+.verdict-badge.incorrect { background: #ffebee; color: #c62828; }
+.verdict-badge.partially_correct { background: #fff3e0; color: #e65100; }
+.verdict-badge.ungradable { background: #f3e5f5; color: #6a1b9a; }
+.verdict-badge.na { background: #eee; color: #888; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; font-size: 13px; }
+.pagination button { padding: 4px 12px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
+.pagination button:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>GaoKao Bench 2025 · 答题审阅</h1>
+  <div class="file-area">
+    <label for="runsFile">📂 加载 Runs JSONL</label>
+    <input type="file" id="runsFile" accept=".jsonl">
+    <label class="grades" for="gradesFile">📋 加载 Grades JSONL</label>
+    <input type="file" id="gradesFile" accept=".jsonl">
+    <label class="review" for="reviewFile">📥 加载待 Review 数据</label>
+    <input type="file" id="reviewFile" accept=".jsonl">
+    <button id="clearBtn" class="clear-btn">🗑 清空</button>
+    <span class="file-name" id="runsFileName"></span>
+    <span class="file-name" id="gradesFileName"></span>
+    <span class="file-name" id="reviewFileName"></span>
+  </div>
+</div>
+
+<div class="stats-bar" id="statsBar"></div>
+
+<div class="filters">
+  <select id="filterSubject"><option value="">全部科目</option></select>
+  <select id="filterVerdict"><option value="">全部判词</option></select>
+  <input type="text" id="filterSearch" placeholder="搜索 item_id...">
+  <span style="font-size:12px;color:#888" id="filterCount"></span>
+</div>
+
+<div class="table-wrap">
+  <table id="mainTable">
+    <colgroup>
+      <col><col><col><col><col><col><col><col><col>
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#<span class="col-resizer"></span></th>
+        <th>Item ID<span class="col-resizer"></span></th>
+        <th>科目<span class="col-resizer"></span></th>
+        <th>模型答案<span class="col-resizer"></span></th>
+        <th>标准答案<span class="col-resizer"></span></th>
+        <th>得分<span class="col-resizer"></span></th>
+        <th>判词<span class="col-resizer"></span></th>
+        <th>首轮延迟<span class="col-resizer"></span></th>
+        <th>Token 用量<span class="col-resizer"></span></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="pagination" id="pagination"></div>
+
+<script>
+// --- State ---
+let runs = [];
+let gradesMap = {};
+let filtered = [];
+
+let pageSize = 30;
+let page = 0;
+
+// --- Subject extraction ---
+function extractSubject(itemId) {
+  const m = itemId.match(/^(?:2025-)?([a-z]+-[a-z]+)/i);
+  if (!m) return '未知';
+  const s = m[1].toLowerCase();
+  const map = { 'national-i': '全国I卷', 'henan': '河南', 'shanghai': '上海', 'beijing': '北京' };
+  const region = map[s] || s;
+  if (itemId.includes('-math')) return region + '·数学';
+  if (itemId.includes('-english')) return region + '·英语';
+  if (itemId.includes('-chinese')) return region + '·语文';
+  if (itemId.includes('-physics')) return region + '·物理';
+  if (itemId.includes('-chemistry')) return region + '·化学';
+  if (itemId.includes('-biology')) return region + '·生物';
+  if (itemId.includes('-history')) return region + '·历史';
+  if (itemId.includes('-geography')) return region + '·地理';
+  if (itemId.includes('-politics')) return region + '·政治';
+  return region;
+}
+
+// --- File loading ---
+document.getElementById('runsFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('runsFileName').textContent = file.name;
+  document.getElementById('reviewFileName').textContent = '';
+  const text = await file.text();
+  runs = text.trim().split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+  applyFilters();
+});
+
+document.getElementById('gradesFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('gradesFileName').textContent = file.name;
+  const text = await file.text();
+  gradesMap = {};
+  let loaded = 0, errors = 0;
+  text.trim().split('\n').filter(l => l.trim()).forEach(l => {
+    try {
+      const g = JSON.parse(l);
+      if (g.item_id) { gradesMap[g.item_id] = g; loaded++; }
+      else errors++;
+    } catch (_) { errors++; }
+  });
+  if (errors) alert(`Grades 加载完成: ${loaded} 条成功, ${errors} 条失败`);
+  applyFilters();
+});
+
+document.getElementById('reviewFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('reviewFileName').textContent = file.name;
+  document.getElementById('runsFileName').textContent = '';
+  const text = await file.text();
+  let loaded = 0, errors = 0;
+  const newRuns = [];
+  gradesMap = {}; // 清空之前的评分数据
+  text.trim().split('\n').filter(l => l.trim()).forEach(l => {
+    try {
+      const q = JSON.parse(l);
+      const run = {
+        item_id: q.id || q.item_id,
+        extracted_answer: '-',
+        messages: {
+          system: '',
+          first_user: q.question?.content || '',
+          second_user: ''
+        },
+        first_response_text: '-',
+        final_response_text: '-',
+        raw_responses: {
+          first: { latency_seconds: 0 },
+          final: { latency_seconds: 0 }
+        },
+        _question_meta: q
+      };
+      newRuns.push(run);
+      loaded++;
+      if (q.answer?.standard) {
+        gradesMap[run.item_id] = {
+          item_id: run.item_id,
+          score: '-',
+          max_score: q.grading?.max_score || q.score || 5,
+          verdict: 'na',
+          standard_answer: q.answer.standard,
+          grading_method: q.grading?.method || 'exact_match',
+          rationale: q.answer?.analysis || ''
+        };
+      }
+    } catch (err) { errors++; }
+  });
+  runs = newRuns;
+  if (errors > 0) {
+    alert(`已加载 ${loaded} 条数据，${errors} 条解析失败`);
+  } else {
+    alert(`已加载 ${loaded} 条待审核题目`);
+  }
+  applyFilters();
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (runs.length === 0 && Object.keys(gradesMap).length === 0) {
+    alert('没有数据需要清空');
+    return;
+  }
+  if (confirm('确定要清空所有数据吗？')) {
+    runs = [];
+    gradesMap = {};
+    document.getElementById('runsFileName').textContent = '';
+    document.getElementById('gradesFileName').textContent = '';
+    document.getElementById('reviewFileName').textContent = '';
+    document.getElementById('filterSubject').innerHTML = '<option value="">全部科目</option>';
+    document.getElementById('filterVerdict').innerHTML = '<option value="">全部判词</option>';
+    document.getElementById('filterSearch').value = '';
+    showEmptyHint();
+    updateStats();
+  }
+});
+
+function showEmptyHint() {
+  if (!runs.length) {
+    document.getElementById('tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#888;">请通过右上角按钮加载 Runs 和 Grades JSONL 文件</td></tr>';
+  }
+}
+
+// --- Filters ---
+document.getElementById('filterSubject').addEventListener('change', applyFilters);
+document.getElementById('filterVerdict').addEventListener('change', applyFilters);
+document.getElementById('filterSearch').addEventListener('input', applyFilters);
+
+function applyFilters() {
+  const subject = document.getElementById('filterSubject').value;
+  const verdict = document.getElementById('filterVerdict').value;
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+
+  filtered = runs.filter(r => {
+    if (subject && extractSubject(r.item_id) !== subject) return false;
+    const g = gradesMap[r.item_id];
+    if (verdict && (!g || g.verdict !== verdict)) return false;
+    if (search && !r.item_id.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Update filter dropdowns
+  const subjects = [...new Set(runs.map(r => extractSubject(r.item_id)))].sort();
+  const sel = document.getElementById('filterSubject');
+  if (sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">全部科目</option>' + subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+
+  const verdicts = [...new Set(Object.values(gradesMap).map(g => g.verdict).filter(Boolean))].sort();
+  const vSel = document.getElementById('filterVerdict');
+  if (vSel.options.length <= 1) {
+    vSel.innerHTML = '<option value="">全部判词</option>' + verdicts.map(v => `<option value="${v}">${v}</option>`).join('');
+  }
+
+  updateStats();
+  page = 0;
+  render();
+}
+
+function updateStats() {
+  const total = runs.length;
+  const hasGrades = Object.keys(gradesMap).length > 0;
+  let correct = 0, incorrect = 0, partial = 0, ungradable = 0, totalScore = 0, totalMax = 0;
+  const bySubject = {};
+
+  runs.forEach(r => {
+    const subj = extractSubject(r.item_id);
+    if (!bySubject[subj]) bySubject[subj] = { score: 0, max: 0, count: 0 };
+    bySubject[subj].count++;
+
+    const g = gradesMap[r.item_id];
+    if (g) {
+      const s = parseFloat(g.score) || 0;
+      const m = parseFloat(g.max_score) || 0;
+      totalScore += s;
+      totalMax += m;
+      bySubject[subj].score += s;
+      bySubject[subj].max += m;
+      if (g.verdict === 'correct') correct++;
+      else if (g.verdict === 'incorrect') incorrect++;
+      else if (g.verdict === 'partially_correct') partial++;
+      else if (g.verdict === 'ungradable') ungradable++;
+    }
+  });
+
+  let html = `<div class="stat"><span class="stat-label">总题数</span><span class="stat-value">${filtered.length} / ${total}</span></div>`;
+  if (hasGrades) {
+    const pct = totalMax > 0 ? (totalScore / totalMax * 100).toFixed(1) : '0';
+    html += `<div class="stat"><span class="stat-label">总分</span><span class="stat-value">${totalScore.toFixed(1)} / ${totalMax.toFixed(1)} (${pct}%)</span></div>`;
+    html += `<div class="stat"><span class="stat-label correct">正确</span><span class="stat-value correct">${correct}</span></div>`;
+    html += `<div class="stat"><span class="stat-label partial">部分正确</span><span class="stat-value partial">${partial}</span></div>`;
+    html += `<div class="stat"><span class="stat-label incorrect">错误</span><span class="stat-value incorrect">${incorrect}</span></div>`;
+    if (ungradable) html += `<div class="stat"><span class="stat-label">不可评分</span><span class="stat-value">${ungradable}</span></div>`;
+
+    for (const [subj, d] of Object.entries(bySubject).sort()) {
+      const p = d.max > 0 ? (d.score / d.max * 100).toFixed(0) : 0;
+      html += `<div class="stat"><span class="stat-label">${subj}</span><span class="stat-value">${d.score.toFixed(1)}/${d.max.toFixed(1)} (${p}%)</span></div>`;
+    }
+  }
+  document.getElementById('statsBar').innerHTML = html;
+  document.getElementById('filterCount').textContent = `显示 ${filtered.length} 条`;
+}
+
+// --- Render ---
+function render() {
+  const start = page * pageSize;
+  const items = filtered.slice(start, start + pageSize);
+  const tbody = document.getElementById('tbody');
+
+  tbody.innerHTML = items.map((r, i) => {
+    const g = gradesMap[r.item_id];
+    const idx = start + i + 1;
+    const subject = extractSubject(r.item_id);
+    const first = r.raw_responses?.first;
+    const latency = first?.latency_seconds?.toFixed(1) || '-';
+    const tokens = first?.payload?.usage?.total_tokens || '-';
+    const verdict = g?.verdict || '';
+    const score = g ? `${g.score}/${g.max_score}` : '-';
+    const standardAnswer = g?.standard_answer || '-';
+
+    const vClass = verdict ? `verdict-badge ${verdict}` : 'verdict-badge na';
+    const vLabel = { correct: '正确', incorrect: '错误', partially_correct: '部分正确', ungradable: '不可评分' }[verdict] || verdict || '—';
+
+    return `<tr data-idx="${idx - 1}" class="row-main">
+      <td>${idx}</td>
+      <td>${r.item_id}</td>
+      <td>${subject}</td>
+      <td><code>${escHtml(r.extracted_answer || '—')}</code></td>
+      <td><code>${escHtml(standardAnswer)}</code></td>
+      <td>${score}</td>
+      <td><span class="${vClass}">${vLabel}</span></td>
+      <td>${latency}s</td>
+      <td>${tokens}</td>
+    </tr>`;
+  }).join('');
+
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  document.getElementById('pagination').innerHTML = `
+    <button ${page === 0 ? 'disabled' : ''} onclick="goPage(0)">⏮</button>
+    <button ${page === 0 ? 'disabled' : ''} onclick="goPage(${page - 1})">◀</button>
+    <span>第 ${page + 1} / ${totalPages || 1} 页</span>
+    <button ${page >= totalPages - 1 ? 'disabled' : ''} onclick="goPage(${page + 1})">▶</button>
+    <button ${page >= totalPages - 1 ? 'disabled' : ''} onclick="goPage(${totalPages - 1})">⏭</button>
+    <span style="margin-left:12px">每页</span>
+    <select onchange="changePageSize(this.value)" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px">
+      <option value="20" ${pageSize === 20 ? 'selected' : ''}>20</option>
+      <option value="30" ${pageSize === 30 ? 'selected' : ''}>30</option>
+      <option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>
+      <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
+    </select>
+  `;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Render LaTeX formulas using KaTeX
+function renderLatex(text) {
+  if (!text) return '';
+  // First escape HTML
+  let html = escHtml(text);
+  
+  // Wait for KaTeX to load if not ready
+  if (typeof katex === 'undefined' || typeof renderMathInElement === 'undefined') {
+    return html;
+  }
+  
+  // Create a temporary container
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  
+  // Use auto-render to process LaTeX
+  try {
+    renderMathInElement(container, {
+      delimiters: [
+        {left: '\\(', right: '\\)', display: false},
+        {left: '\\[', right: '\\]', display: true},
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      throwOnError: false,
+      strict: false
+    });
+  } catch (e) {
+    console.warn('KaTeX render error:', e);
+    return html;
+  }
+  
+  return container.innerHTML;
+}
+
+// --- Row click to expand ---
+document.getElementById('tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr.row-main');
+  if (!tr) return;
+  const idx = parseInt(tr.dataset.idx);
+  const row = document.getElementById(`detail-${idx}`);
+
+  // 如果已经展开，不再折叠
+  if (row) {
+    return;
+  }
+
+  const r = filtered[idx];
+  if (!r) return;
+
+  const g = gradesMap[r.item_id];
+  const first = r.raw_responses?.first;
+  const final = r.raw_responses?.final;
+  const reasoning1 = first?.payload?.choices?.[0]?.message?.reasoning_content || '';
+  const reasoning2 = final?.payload?.choices?.[0]?.message?.reasoning_content || '';
+
+  const detail = document.createElement('tr');
+  detail.className = 'row-detail';
+  detail.id = `detail-${idx}`;
+  detail.innerHTML = `<td colspan="9">
+    <div class="detail-section"><h4>系统提示</h4><div class="detail-content">${renderLatex(r.messages?.system || '')}</div></div>
+    <div class="detail-section"><h4>首轮提示</h4><div class="detail-content">${renderLatex(r.messages?.first_user || '')}</div></div>
+    <div class="detail-section"><h4>二轮提示</h4><div class="detail-content">${renderLatex(r.messages?.second_user || '')}</div></div>
+    <div class="detail-section"><h4>首轮回复</h4><div class="detail-content answer">${renderLatex(r.first_response_text || '')}</div></div>
+    ${reasoning1 ? `<div class="detail-section"><h4>首轮 CoT 推理</h4><div class="detail-content reasoning">${renderLatex(reasoning1)}</div></div>` : ''}
+    <div class="detail-section"><h4>最终回复</h4><div class="detail-content answer">${renderLatex(r.final_response_text || '')}</div></div>
+    ${reasoning2 ? `<div class="detail-section"><h4>二轮 CoT 推理</h4><div class="detail-content reasoning">${renderLatex(reasoning2)}</div></div>` : ''}
+    <div class="detail-section"><h4>提取答案</h4><div class="detail-content answer"><code>${renderLatex(r.extracted_answer || '—')}</code></div></div>
+    ${g ? `<div class="detail-section"><h4>评分详情</h4><div class="detail-content">
+      标准答案: <code>${renderLatex(g.standard_answer || '')}</code> &nbsp; 得分: ${g.score}/${g.max_score} &nbsp; 判词: ${g.verdict} &nbsp; 方法: ${g.grading_method}<br>
+      理由: ${renderLatex(g.rationale || '')}
+    </div></div>` : ''}
+    <div class="detail-section" style="font-size:11px;color:#888">
+      首轮延迟: ${first?.latency_seconds?.toFixed(2) || '-'}s &nbsp;
+      二轮延迟: ${final?.latency_seconds?.toFixed(2) || '-'}s &nbsp;
+      Token: prompt=${first?.payload?.usage?.prompt_tokens || '-'} completion=${first?.payload?.usage?.completion_tokens || '-'} total=${first?.payload?.usage?.total_tokens || '-'}
+    </div>
+  </td>`;
+  tr.after(detail);
+});
+
+function goPage(p) {
+  page = Math.max(0, Math.min(p, Math.ceil(filtered.length / pageSize) - 1));
+  render();
+  document.querySelector('.table-wrap').scrollTop = 0;
+}
+
+function changePageSize(size) {
+  pageSize = parseInt(size);
+  page = 0;
+  render();
+}
+
+// --- Column resize ---
+(function initResize() {
+  const table = document.getElementById('mainTable');
+  if (!table) return;
+  const cols = table.querySelectorAll('col');
+  let dragCol = null, startX = 0, startW = 0;
+
+  table.addEventListener('mousedown', (e) => {
+    const resizer = e.target.closest('.col-resizer');
+    if (!resizer) return;
+    e.preventDefault();
+    const th = resizer.parentElement;
+    const colIdx = [...th.parentElement.children].indexOf(th);
+    dragCol = cols[colIdx];
+    startX = e.pageX;
+    startW = dragCol.offsetWidth;
+    resizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragCol) return;
+    const diff = e.pageX - startX;
+    const newW = Math.max(40, startW + diff);
+    dragCol.style.width = newW + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragCol) return;
+    dragCol = null;
+    document.querySelectorAll('.col-resizer.active').forEach(r => r.classList.remove('active'));
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+// --- Init ---
+showEmptyHint();
+</script>
+</body>
+</html>

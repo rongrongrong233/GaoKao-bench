@@ -1,0 +1,12 @@
+{
+  "backend": "command_json",
+  "command": "python3 path/to/vlm_adapter.py",
+  "timeout_seconds": 600,
+  "dpi": 180,
+  "render_region_images": true,
+  "include_full_page_context": true,
+  "extract_answers": true,
+  "segmentation_prompt": "configs/visual_extractors/prompts/segmentation.md",
+  "content_prompt": "configs/visual_extractors/prompts/content_transcription.md",
+  "answer_prompt": "configs/visual_extractors/prompts/answer_transcription.md"
+}
