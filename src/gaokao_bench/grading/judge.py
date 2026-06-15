@@ -49,6 +49,8 @@ class JudgeModelGrader:
         if score is not None:
             score = max(0.0, min(float(max_score), score))
         verdict = parsed.get("verdict") or ("ungradable" if score is None else "partially_correct")
+        if score is None and verdict == "ungradable":
+            score = 0.0
         return {
             "score": score,
             "verdict": verdict,
@@ -72,4 +74,14 @@ class JudgeModelGrader:
         try:
             return json.loads(match.group(0))
         except json.JSONDecodeError:
-            return {}
+            score_match = re.search(r'"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)', match.group(0))
+            verdict_match = re.search(r'"verdict"\s*:\s*"([^"]+)"', match.group(0))
+            rationale_match = re.search(r'"rationale"\s*:\s*"(.+?)"\s*(?:[,}])', match.group(0), flags=re.DOTALL)
+            parsed: dict[str, Any] = {}
+            if score_match:
+                parsed["score"] = score_match.group(1)
+            if verdict_match:
+                parsed["verdict"] = verdict_match.group(1)
+            if rationale_match:
+                parsed["rationale"] = rationale_match.group(1)
+            return parsed
