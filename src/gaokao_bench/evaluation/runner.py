@@ -113,6 +113,8 @@ def _message_text(response: dict[str, Any]) -> str:
     content = message.get("content")
     if isinstance(content, str):
         return content
+    if content is None:
+        return str(choices[0].get("finish_reason") or "")
     return json.dumps(content, ensure_ascii=False)
 
 
