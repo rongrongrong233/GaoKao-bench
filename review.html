@@ -106,7 +106,7 @@ tr.expanded { background: #e8f0fe; }
         <th>得分<span class="col-resizer"></span></th>
         <th>判词<span class="col-resizer"></span></th>
         <th>首轮延迟<span class="col-resizer"></span></th>
-        <th>Token 用量<span class="col-resizer"></span></th>
+        <th>首轮 Token<span class="col-resizer"></span></th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -485,7 +485,8 @@ document.getElementById('tbody').addEventListener('click', (e) => {
     <div class="detail-section" style="font-size:11px;color:#888">
       首轮延迟: ${first?.latency_seconds?.toFixed(2) || '-'}s &nbsp;
       二轮延迟: ${final?.latency_seconds?.toFixed(2) || '-'}s &nbsp;
-      Token: prompt=${first?.payload?.usage?.prompt_tokens || '-'} completion=${first?.payload?.usage?.completion_tokens || '-'} total=${first?.payload?.usage?.total_tokens || '-'}
+      首轮 Token: prompt=${first?.payload?.usage?.prompt_tokens || '-'} completion=${first?.payload?.usage?.completion_tokens || '-'} total=${first?.payload?.usage?.total_tokens || '-'} &nbsp;
+      次轮 Token: prompt=${final?.payload?.usage?.prompt_tokens || '-'} completion=${final?.payload?.usage?.completion_tokens || '-'} total=${final?.payload?.usage?.total_tokens || '-'}
     </div>
   </td>`;
   tr.after(detail);
