@@ -158,6 +158,28 @@ document.getElementById('gradesFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   document.getElementById('gradesFileName').textContent = file.name;
+
+  // 自动联立同名 run 文件
+  let autoRunLoaded = false;
+  if (location.protocol !== 'file:') {
+    try {
+      const runUrl = 'data/results/runs/' + encodeURIComponent(file.name);
+      const resp = await fetch(runUrl);
+      if (resp.ok) {
+        const runText = await resp.text();
+        const parsed = runText.trim().split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+        if (parsed.length > 0) {
+          runs = parsed;
+          document.getElementById('runsFileName').textContent = file.name;
+          document.getElementById('reviewFileName').textContent = '';
+          autoRunLoaded = true;
+        }
+      } else if (resp.status === 404) {
+        console.warn('同名 run 文件不存在:', file.name);
+      }
+    } catch (_) { /* 网络不通时不报错 */ }
+  }
+
   const text = await file.text();
   gradesMap = {};
   let loaded = 0, errors = 0;
@@ -168,7 +190,10 @@ document.getElementById('gradesFile').addEventListener('change', async (e) => {
       else errors++;
     } catch (_) { errors++; }
   });
-  if (errors) alert(`Grades 加载完成: ${loaded} 条成功, ${errors} 条失败`);
+  let msg = `Grades 加载完成: ${loaded} 条成功, ${errors} 条失败`;
+  if (autoRunLoaded) msg += '（已自动联立同名 run）';
+  if (errors) alert(msg);
+  else if (autoRunLoaded) alert(msg);
   applyFilters();
 });
 
