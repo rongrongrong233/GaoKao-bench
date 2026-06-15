@@ -19,6 +19,18 @@ def validate_grade_items(items: dict[str, dict]) -> list[str]:
     return failures
 
 
+def merge_records(existing: list[dict], updates: list[dict]) -> list[dict]:
+    """合并：用 updates 中的记录覆盖 existing 中同 item_id 的记录，保持原顺序，新 item_id 追加到末尾。"""
+    by_item_id = {record.get("item_id"): record for record in existing}
+    order = [record.get("item_id") for record in existing]
+    for record in updates:
+        item_id = record.get("item_id")
+        if item_id not in by_item_id:
+            order.append(item_id)
+        by_item_id[item_id] = record
+    return [by_item_id[item_id] for item_id in order if item_id in by_item_id]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Grade run records against benchmark items.")
     parser.add_argument("--items", type=Path, action="append", default=None, help="Benchmark item JSONL. Repeatable.")
@@ -28,6 +40,8 @@ def main() -> int:
     parser.add_argument("--judge-model-index", type=int, default=0)
     parser.add_argument("--judge-model-name", type=str, default=None)
     parser.add_argument("--use-judge", action="store_true", help="Use the configured judge model for judge_model items.")
+    parser.add_argument("--item-id", action="append", default=None, help="Grade only the selected item id(s). Repeatable.")
+    parser.add_argument("--merge-existing", action="store_true", help="If output exists, replace matching item_id records instead of rewriting the file with only this run.")
     parser.add_argument("--allow-unready", action="store_true", help="Allow legacy or not eval-ready items. Use only for debugging.")
     args = parser.parse_args()
 
@@ -46,6 +60,14 @@ def main() -> int:
         output_filename = args.runs.name
         args.output = root / "data/results/grades" / output_filename
 
+    if args.item_id:
+        wanted = set(args.item_id)
+        runs = [r for r in runs if r.get("item_id") in wanted]
+        if not runs:
+            raise ValueError(f"no run records found for item ids: {', '.join(sorted(wanted))}")
+        missing = wanted - {r["item_id"] for r in runs}
+        if missing:
+            print(f"Warning: item ids not found in runs: {', '.join(sorted(missing))}")
     run_item_ids = {str(run.get("item_id") or "<missing item_id>") for run in runs}
     missing_item_ids = sorted(run_item_ids - set(items))
     if missing_item_ids:
@@ -76,6 +98,9 @@ def main() -> int:
     for run in runs:
         item = items[run["item_id"]]
         grades.append(grade_run(item, run, judge_grader=judge_grader))
+
+    if args.merge_existing and args.output.exists():
+        grades = merge_records(read_jsonl(args.output), grades)
     write_jsonl(args.output, grades)
     print(f"graded={len(grades)} output={args.output}")
     return 0
