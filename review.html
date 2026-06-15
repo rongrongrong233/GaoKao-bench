@@ -126,7 +126,7 @@ let page = 0;
 
 // --- Subject extraction ---
 function extractSubject(itemId) {
-  const m = itemId.match(/^(?:2025-)?([a-z]+-[a-z]+)/i);
+  const m = itemId.match(/^(?:\d{4}-)?([a-z]+-[a-z]+)/i);
   if (!m) return '未知';
   const s = m[1].toLowerCase();
   const map = { 'national-i': '全国I卷', 'henan': '河南', 'shanghai': '上海', 'beijing': '北京' };
